@@ -160,21 +160,26 @@ public class JavaRulingTest {
   @Test
   public void guava() throws Exception {
     String projectName = "guava";
-    MavenBuild build = test_project("com.google.guava:guava", projectName);
+    MavenBuild build = test_project("com.google.guava:guava", projectName, null);
     executeBuildWithCommonProperties(build, projectName);
   }
 
   @Test
   public void apache_commons_beanutils() throws Exception {
     String projectName = "commons-beanutils";
-    MavenBuild build = test_project("commons-beanutils:commons-beanutils", projectName);
+    MavenBuild build = test_project("commons-beanutils:commons-beanutils", projectName, null);
     executeBuildWithCommonProperties(build, projectName);
   }
 
   @Test
   public void eclipse_jetty() throws Exception {
     String projectName = "eclipse-jetty";
-    MavenBuild build = test_project("org.eclipse.jetty:jetty-project", projectName)
+    List<String> dirs = Arrays.asList("jetty-http/", "jetty-io/", "jetty-jmx/", "jetty-server/", "jetty-slf4j-impl/", "jetty-util/", "jetty-util-ajax/", "jetty-xml/", "tests/jetty-http-tools/");
+    String binaries = dirs.stream().map(dir -> FileLocation.of("../sources/eclipse-jetty/" + dir + "target/classes"))
+      .map(JavaRulingTest::getFileLocationAbsolutePath)
+      .collect(Collectors.joining(","));
+
+    MavenBuild build = test_project("org.eclipse.jetty:jetty-project", projectName, binaries)
       .setProperty("sonar.exclusions", "jetty-server/src/main/java/org/eclipse/jetty/server/HttpInput.java," +
           "jetty-osgi/jetty-osgi-boot/src/main/java/org/eclipse/jetty/osgi/boot/internal/serverfactory/ServerInstanceWrapper.java")
       .addArgument("-Dpmd.skip=true")
@@ -182,11 +187,19 @@ public class JavaRulingTest {
     executeBuildWithCommonProperties(build, projectName);
   }
 
+  private static String getFileLocationAbsolutePath(FileLocation location) {
+    try {
+      return location.getFile().getCanonicalFile().getAbsolutePath();
+    } catch (IOException e) {
+      return "";
+    }
+  }
+
   @Test
   public void sonarqube_server() throws Exception {
     // sonarqube-6.5/server/sonar-server (v.6.5)
     String projectName = "sonar-server";
-    MavenBuild build = test_project("org.sonarsource.sonarqube:sonar-server", "sonarqube-6.5/server", projectName);
+    MavenBuild build = test_project("org.sonarsource.sonarqube:sonar-server", "sonarqube-6.5/server", projectName, null);
     executeBuildWithCommonProperties(build, projectName);
   }
 
@@ -211,20 +224,27 @@ public class JavaRulingTest {
   @Test
   public void regex_examples() throws IOException {
     String projectName = "regex-examples";
-    MavenBuild build = test_project("org.regex-examples:regex-examples", projectName);
+    MavenBuild build = test_project("org.regex-examples:regex-examples", projectName, null);
     executeBuildWithCommonProperties(build, projectName);
   }
 
-  private static MavenBuild test_project(String projectKey, String projectName) throws IOException {
-    return test_project(projectKey, null, projectName);
+  private static MavenBuild test_project(String projectKey, String projectName, @Nullable String binariesPath) throws IOException {
+    return test_project(projectKey, null, projectName, binariesPath);
   }
 
-  private static MavenBuild test_project(String projectKey, @Nullable String path, String projectName) throws IOException {
+  private static MavenBuild test_project(String projectKey, @Nullable String path, String projectName, @Nullable String binariesPath) throws IOException {
     String pomLocation = "../sources/" + (path != null ? path + "/" : "") + projectName + "/pom.xml";
     File pomFile = FileLocation.of(pomLocation).getFile().getCanonicalFile();
+    
+    if (binariesPath == null) {
+      String binariesLocation = "../sources/" + (path != null ? path + "/" : "") + projectName + "/target/classes/";
+      File binaries = FileLocation.of(binariesLocation).getFile().getCanonicalFile();
+      binariesPath = binaries.getAbsolutePath();
+    }
     prepareProject(projectKey, projectName);
     MavenBuild mavenBuild = MavenBuild.create().setPom(pomFile).setCleanPackageSonarGoals().addArgument("-DskipTests");
     mavenBuild.setProperty("sonar.projectKey", projectKey);
+    mavenBuild.setProperty("sonar.java.binaries", binariesPath);
     return mavenBuild;
   }
 
